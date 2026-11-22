@@ -103,11 +103,28 @@ def generate_gemini_reply(
     focus: str,
     uploads: list,
     config,
+    chat_messages: list[dict[str, object]] | None = None,
 ) -> tuple[str, list[dict[str, object]]]:
     from google import genai
     from src.tools import search_vault
 
-    parts: list[object] = [prompt]
+    parts: list[object] = []
+    history = list(chat_messages or [])[-12:]
+    if history:
+        history_text = "\n".join(
+            f"{str(message.get('role', 'user')).upper()}: "
+            f"{str(message.get('content', '')).strip()}"
+            for message in history
+            if str(message.get("content", "")).strip()
+        )
+        if history_text:
+            parts.append(
+                "Vorheriger Chat-Verlauf:\n"
+                f"{history_text}\n\n"
+                "Beziehe dich auf diesen Verlauf, wenn die neue Frage darauf "
+                "aufbaut."
+            )
+    parts.append(prompt)
     vault_markers = (
         "aus dem vault",
         "aus dem obsidian",
@@ -394,6 +411,7 @@ if chat_input:
                 st.session_state.focus,
                 uploads,
                 config,
+                chat_messages=chat.get("messages", [])[:-1],
             )
         except Exception as exc:
             error_text = str(exc).lower()
