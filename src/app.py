@@ -43,6 +43,8 @@ def initialize_state() -> None:
         st.session_state.download_files = []
     if "focus" not in st.session_state:
         st.session_state.focus = "Allrounder"
+    if "model" not in st.session_state:
+        st.session_state.model = "gemini-3.8-flash"
 
 
 def get_folders_for_focus(focus: str) -> list[str] | None:
@@ -89,7 +91,7 @@ def extract_uploaded_text(upload) -> str:
 
 def generate_mock_reply(prompt: str, focus: str) -> str:
     return (
-        f"[Mock-Modus] Fokus: {focus}\n\n"
+        f"[Mock-Modus] Fokus: {focus} | Modell: {st.session_state.model}\n\n"
         f"Ich habe deine Anfrage erhalten: {prompt}\n\n"
         "In der echten Konfiguration wird diese Anfrage mit Gemini, "
         "Obsidian-RAG und optionaler Websuche beantwortet."
@@ -131,7 +133,7 @@ def generate_gemini_reply(
 
     client = genai.Client(api_key=config.gemini_api_key)
     response = client.models.generate_content(
-        model=config.gemini_model,
+        model=st.session_state.model,
         contents=parts,
         config=build_generate_content_config(enable_google_search=True),
     )
@@ -171,6 +173,26 @@ with st.sidebar:
             "System-Engineering & Projekt-Architekt",
             "Interview- & Reflexions-Coach",
         ].index(st.session_state.focus),
+    )
+
+    st.subheader("Gemini-Modell")
+    model_options = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-4-argon",
+        "gemini-4-carbon",
+        "gemini-4-hydrogen",
+        "gemini-4-neon",
+    ]
+    st.session_state.model = st.selectbox(
+        "Modell für diesen Chat",
+        model_options,
+        index=model_options.index(st.session_state.model)
+        if st.session_state.model in model_options
+        else 0,
+        help="Standard: Flash-Modell. Stärkere Modelle können mehr kosten.",
     )
 
     st.subheader("Vault-Synchronisierung")
