@@ -155,15 +155,28 @@ def generate_gemini_reply(
         )
         own_text = own_response.text or ""
 
-        try:
-            web_response = client.models.generate_content(
-                model=st.session_state.model,
-                contents=f"Beantworte diese Anfrage mit aktuellen Webquellen: {prompt}",
-                config=web_config,
-            )
-            web_text = web_response.text or ""
-        except Exception:
-            web_text = ""
+        web_text = ""
+        live_request_markers = (
+            "aktuell",
+            "news",
+            "nachricht",
+            "heute",
+            "live",
+            "im internet",
+            "websuche",
+            "neueste",
+            "latest",
+        )
+        if any(marker in prompt.casefold() for marker in live_request_markers):
+            try:
+                web_response = client.models.generate_content(
+                    model=st.session_state.model,
+                    contents=f"Beantworte diese Anfrage mit aktuellen Webquellen: {prompt}",
+                    config=web_config,
+                )
+                web_text = web_response.text or ""
+            except Exception:
+                web_text = ""
 
         text = own_text
         if web_text:
