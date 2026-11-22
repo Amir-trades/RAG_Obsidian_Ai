@@ -213,12 +213,28 @@ if chat_input:
         reply = generate_mock_reply(prompt, st.session_state.focus)
         sources: list[dict[str, object]] = []
     else:
-        reply, sources = generate_gemini_reply(
-            prompt,
-            st.session_state.focus,
-            uploads,
-            config,
-        )
+        try:
+            reply, sources = generate_gemini_reply(
+                prompt,
+                st.session_state.focus,
+                uploads,
+                config,
+            )
+        except Exception as exc:
+            error_text = str(exc).lower()
+            if "resource_exhausted" in error_text or "429" in error_text:
+                st.warning(
+                    "Gemini-Konto: Das API-Kontingent ist ausgeschöpft oder der "
+                    "Tarif erlaubt noch keine Live-Anfragen. Bitte Quota prüfen "
+                    "oder Billing aktivieren."
+                )
+            else:
+                st.warning(
+                    "Die Live-Anfrage an Gemini ist fehlgeschlagen. "
+                    "Bitte Konfiguration und Schlüssel prüfen."
+                )
+            reply = generate_mock_reply(prompt, st.session_state.focus)
+            sources = []
 
     st.session_state.used_sources = sources
     add_message(chat, "assistant", reply, sources=sources)
