@@ -30,7 +30,7 @@ flowchart LR
 ## Screenshot
 
 ![Second Brain UI](docs/screenshots/app.png)
-![Obsidian Second Brain Graph](docs/screenshots/Obsidian_Brain/Vault.png)
+![Obsidian Second Brain Graph](docs/screenshots/Obsidian-Vault.png)
 
 ## Installation
 
