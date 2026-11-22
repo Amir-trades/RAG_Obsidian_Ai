@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import sys
 
@@ -27,6 +26,7 @@ from src.ingest import (
 )
 from src.tools import (
     build_generate_content_config,
+    build_two_step_configs,
     create_downloadable_file,
     propose_note_save,
 )
@@ -132,11 +132,44 @@ def generate_gemini_reply(
             parts.append(extracted)
 
     client = genai.Client(api_key=config.gemini_api_key)
-    response = client.models.generate_content(
-        model=st.session_state.model,
-        contents=parts,
-        config=build_generate_content_config(enable_google_search=True),
-    )
+    try:
+        response = client.models.generate_content(
+            model=st.session_state.model,
+            contents=parts,
+            config=build_generate_content_config(enable_google_search=True),
+        )
+    except Exception as exc:
+        error_text = str(exc).lower()
+        if (
+            "include_server_side_tool_invocations" not in error_text
+            and "built-in tools" not in error_text
+            and "google_search" not in error_text
+        ):
+            raise
+
+        own_config, web_config = build_two_step_configs()
+        own_response = client.models.generate_content(
+            model=st.session_state.model,
+            contents=parts,
+            config=own_config,
+        )
+        own_text = own_response.text or ""
+
+        try:
+            web_response = client.models.generate_content(
+                model=st.session_state.model,
+                contents=f"Beantworte diese Anfrage mit aktuellen Webquellen: {prompt}",
+                config=web_config,
+            )
+            web_text = web_response.text or ""
+        except Exception:
+            web_text = ""
+
+        text = own_text
+        if web_text:
+            text = f"{own_text}\n\nAktuelle Websuche:\n{web_text}".strip()
+        sources = list(st.session_state.used_sources)
+        return text or "Keine Antwort erhalten.", sources
     text = response.text or "Keine Antwort erhalten."
     sources = list(st.session_state.used_sources)
     return text, sources
@@ -223,13 +256,12 @@ if chat_input:
     add_message(chat, "user", prompt)
     save_chat(chat)
 
-    mock_mode = not bool(os.environ.get("GEMINI_API_KEY"))
-    if mock_mode:
-        try:
-            config = load_config()
-            mock_mode = not bool(config.gemini_api_key)
-        except ConfigError:
-            mock_mode = True
+    try:
+        config = load_config()
+        mock_mode = not bool(config.gemini_api_key)
+    except ConfigError:
+        config = None
+        mock_mode = True
 
     if mock_mode:
         reply = generate_mock_reply(prompt, st.session_state.focus)
@@ -252,10 +284,10 @@ if chat_input:
                 )
             else:
                 st.warning(
-                    "Die Live-Anfrage an Gemini ist fehlgeschlagen. "
-                    "Bitte Konfiguration und Schlüssel prüfen."
+                    "Die Live-Anfrage an Gemini ist fehlgeschlagen: "
+                    f"{type(exc).__name__}: {str(exc).splitlines()[0][:300]}"
                 )
-            reply = generate_mock_reply(prompt, st.session_state.focus)
+            reply = "[Live-Modus] Die Anfrage konnte nicht verarbeitet werden."
             sources = []
 
     st.session_state.used_sources = sources
