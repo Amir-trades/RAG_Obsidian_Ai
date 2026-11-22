@@ -79,7 +79,7 @@ Multimodaler Input via st.chat_input(accept_file=True) für Bilder (.png, .jpg, 
 Aufklappbare Box unter jeder Antwort (st.expander("Genutzte Obsidian-Quellen & Web-Links")), befüllt aus den mitgeloggten Quellen aus tools.py und den Grounding-Metadaten von google_search.
 State-sichere Action-Buttons: Ausstehende Speicher-Vorschläge (propose_note_save) und generierte Dateien (create_downloadable_file) sauber über st.session_state verwalten, sodass Klicks auf „Bestätigen & ins Vault speichern“ oder „Datei herunterladen“ bei Streamlit-Reruns nicht verloren gehen.
 Phase 6: GitHub-Publish-Routine (Dogfooding!)
-[ ] Das fertige Projekt nach den eigenen Regeln aus System_Engineering auf GitHub veröffentlichen: .gitignore prüfen (keine .env, keine chroma_db/, keine chats/), saubere README.md mit Architektur-Schaubild (Mermaid.js) und Screenshots erstellen.
+[x] Das fertige Projekt nach den eigenen Regeln aus System_Engineering auf GitHub veröffentlichen: .gitignore prüfen (keine .env, keine chroma_db/, keine chats/), saubere README.md mit Architektur-Schaubild (Mermaid.js) und Screenshots erstellen.
 5. Regeln für den Coding-Assistenten (Vibe-Coding-Guardrails)
 Schrittweise Umsetzung: Arbeite immer nur eine Phase ab, erkläre kurz die Architektur-Entscheidungen und warte auf mein Okay, bevor du mit der nächsten Phase beginnst.
 Kein Over-Engineering: Kein LangChain/LlamaIndex – direktes google-genai SDK + chromadb, damit jeder Code-Teil transparent und im Bewerbungsgespräch leicht erklärbar bleibt.
