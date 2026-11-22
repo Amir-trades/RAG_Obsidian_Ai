@@ -261,6 +261,8 @@ def generate_gemini_reply(
                     f"[{relative}]\n{file_text[:4000].strip()}"
                 )
             if context_parts:
+                from google.genai import types
+
                 follow_up = (
                     f"{prompt}\n\nLokaler Obsidian-Kontext:\n"
                     + "\n\n".join(context_parts)
@@ -270,9 +272,20 @@ def generate_gemini_reply(
                 response = client.models.generate_content(
                     model=st.session_state.model,
                     contents=follow_up,
-                    config=own_config,
+                    config=types.GenerateContentConfig(),
                 )
                 text = response.text
+
+    if not text:
+        from google.genai import types
+
+        retry_contents = parts
+        retry_response = client.models.generate_content(
+            model=st.session_state.model,
+            contents=retry_contents,
+            config=types.GenerateContentConfig(),
+        )
+        text = retry_response.text
 
     if not text:
         text = (
