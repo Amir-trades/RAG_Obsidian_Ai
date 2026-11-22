@@ -105,8 +105,65 @@ def generate_gemini_reply(
     config,
 ) -> tuple[str, list[dict[str, object]]]:
     from google import genai
+    from src.tools import search_vault
 
     parts: list[object] = [prompt]
+    vault_markers = (
+        "aus dem vault",
+        "aus dem obsidian",
+        "beschreibe mich",
+        "mein profil",
+        "über mich",
+    )
+    if any(marker in prompt.casefold() for marker in vault_markers):
+        try:
+            from src.ingest import scan_markdown_files
+
+            config_vault = load_config().obsidian_vault_path
+            markdown_files = scan_markdown_files(config_vault)
+            terms = {
+                term.casefold()
+                for term in prompt.replace("(", " ").replace(")", " ").split()
+                if len(term.casefold()) >= 4
+                and term.casefold()
+                not in {"beschreibe", "person", "vault", "mal", "dies", "mich"}
+            }
+            matches: list[tuple[Path, str]] = []
+            for path in markdown_files:
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    continue
+                score = sum(text.casefold().count(term) for term in terms)
+                filename_hint = path.name.casefold()
+                if any(
+                    hint in filename_hint
+                    for hint in ("profil", "person", "identita", "über-mich", "ueber-mich", "cv")
+                ):
+                    score += 20
+                if "identität" in text.casefold() or "identity" in text.casefold():
+                    score += 10
+                if score:
+                    matches.append((path, text))
+            matches.sort(key=lambda item: item[0].name.casefold())
+            context_parts = []
+            for path, text in matches[:8]:
+                relative = path.relative_to(config_vault)
+                excerpt = text[:4000].strip()
+                context_parts.append(f"[{relative}]\n{excerpt}")
+
+            if context_parts:
+                context = "\n\n".join(context_parts)
+                parts.append(
+                    "Lokaler Obsidian-Kontext:\n"
+                    f"{context}\n\n"
+                    "Beantworte die Frage ausschließlich auf Basis dieses "
+                    "lokalen Kontexts und kennzeichne Unsicherheit."
+                )
+        except Exception:
+            parts.append(
+                "Hinweis: Die lokale Obsidian-Suche ist nicht verfügbar."
+            )
     for upload in uploads:
         suffix = Path(upload.name).suffix.lower()
         if suffix in {".png", ".jpg", ".jpeg", ".webp", ".pdf"}:
@@ -132,58 +189,96 @@ def generate_gemini_reply(
             parts.append(extracted)
 
     client = genai.Client(api_key=config.gemini_api_key)
-    try:
-        response = client.models.generate_content(
-            model=st.session_state.model,
-            contents=parts,
-            config=build_generate_content_config(enable_google_search=True),
-        )
-    except Exception as exc:
-        error_text = str(exc).lower()
-        if (
-            "include_server_side_tool_invocations" not in error_text
-            and "built-in tools" not in error_text
-            and "google_search" not in error_text
-        ):
-            raise
+    own_config, web_config = build_two_step_configs()
 
-        own_config, web_config = build_two_step_configs()
-        own_response = client.models.generate_content(
-            model=st.session_state.model,
-            contents=parts,
-            config=own_config,
-        )
-        own_text = own_response.text or ""
+    live_request_markers = (
+        "aktuell",
+        "news",
+        "nachricht",
+        "heute",
+        "live",
+        "im internet",
+        "websuche",
+        "neueste",
+        "latest",
+    )
+    selected_config = (
+        web_config
+        if any(marker in prompt.casefold() for marker in live_request_markers)
+        else own_config
+    )
 
-        web_text = ""
-        live_request_markers = (
-            "aktuell",
-            "news",
-            "nachricht",
-            "heute",
-            "live",
-            "im internet",
-            "websuche",
-            "neueste",
-            "latest",
-        )
-        if any(marker in prompt.casefold() for marker in live_request_markers):
-            try:
-                web_response = client.models.generate_content(
-                    model=st.session_state.model,
-                    contents=f"Beantworte diese Anfrage mit aktuellen Webquellen: {prompt}",
-                    config=web_config,
+    response = client.models.generate_content(
+        model=st.session_state.model,
+        contents=parts,
+        config=selected_config,
+    )
+    text = response.text
+    if not text:
+        function_calls: list[tuple[str, dict[str, object]]] = []
+        for candidate in getattr(response, "candidates", []) or []:
+            content = getattr(candidate, "content", None)
+            for part in getattr(content, "parts", []) or []:
+                function_call = getattr(part, "function_call", None)
+                if function_call is not None:
+                    arguments = getattr(function_call, "args", {}) or {}
+                    function_calls.append(
+                        (str(getattr(function_call, "name", "")), dict(arguments))
+                    )
+
+        if function_calls:
+            from src.ingest import scan_markdown_files
+
+            query = prompt
+            for name, arguments in function_calls:
+                if name == "search_vault":
+                    query = str(arguments.get("query", prompt))
+
+            config_vault = load_config().obsidian_vault_path
+            markdown_files = scan_markdown_files(config_vault)
+            terms = {
+                term.casefold()
+                for term in query.replace("(", " ").replace(")", " ").split()
+                if len(term.casefold()) >= 4
+                and term.casefold()
+                not in {"welche", "welcher", "beschreibe", "person", "vault", "mal"}
+            }
+            matches: list[tuple[Path, str]] = []
+            for path in markdown_files:
+                try:
+                    file_text = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    continue
+                score = sum(file_text.casefold().count(term) for term in terms)
+                if score:
+                    matches.append((path, file_text))
+            matches.sort(key=lambda item: item[0].name.casefold())
+
+            context_parts = []
+            for path, file_text in matches[:8]:
+                relative = path.relative_to(config_vault)
+                context_parts.append(
+                    f"[{relative}]\n{file_text[:4000].strip()}"
                 )
-                web_text = web_response.text or ""
-            except Exception:
-                web_text = ""
+            if context_parts:
+                follow_up = (
+                    f"{prompt}\n\nLokaler Obsidian-Kontext:\n"
+                    + "\n\n".join(context_parts)
+                    + "\n\nBeantworte die Frage auf Basis dieses lokalen "
+                    "Kontexts und kennzeichne Unsicherheit."
+                )
+                response = client.models.generate_content(
+                    model=st.session_state.model,
+                    contents=follow_up,
+                    config=own_config,
+                )
+                text = response.text
 
-        text = own_text
-        if web_text:
-            text = f"{own_text}\n\nAktuelle Websuche:\n{web_text}".strip()
-        sources = list(st.session_state.used_sources)
-        return text or "Keine Antwort erhalten.", sources
-    text = response.text or "Keine Antwort erhalten."
+    if not text:
+        text = (
+            "Das Modell hat keine Textantwort erzeugt. Bitte frage erneut oder "
+            "wähle ein anderes Gemini-Modell."
+        )
     sources = list(st.session_state.used_sources)
     return text, sources
 
