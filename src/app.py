@@ -314,8 +314,8 @@ def generate_gemini_reply(
 
 
 initialize_state()
-st.set_page_config(page_title="Second Brain AI", layout="wide")
-st.title("Second Brain AI-Architect")
+st.set_page_config(page_title="Aqua", layout="wide")
+st.title("Aqua – Second Brain AI-Architect")
 
 with st.sidebar:
     st.subheader("Vault")

@@ -1,4 +1,4 @@
-# Second Brain AI-Architect
+# Aqua – Second Brain AI-Architect
 
 Lokale, browserbasierte Second-Brain-Anwendung auf macOS. Sie kombiniert Gemini,
 semantische Obsidian-Suche, Google-Suche und Human-in-the-Loop Write-Back.
@@ -57,6 +57,11 @@ streamlit run src/app.py
 ```
 
 Die Anwendung läuft ohne API-Key im lokalen Mock-Modus.
+
+Für macOS können `aqua-start.command` und `aqua-stop.command` als
+Doppelklick gestartet oder in der App „Kurzbefehle“ als Aktionen hinterlegt
+werden. Beim Start wird die Seite unter `http://127.0.0.1:8501` automatisch
+geöffnet; beim Stoppen wird der Server auf Port 8501 beendet.
 
 ## Mock-Tests
 
